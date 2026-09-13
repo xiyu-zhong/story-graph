@@ -198,7 +198,9 @@ test("condor: final chapter, alias search and linked scenes", async ({
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/work/condor?chapter=condor-40&view=flow");
-  await expect(page.getByRole("button", { name: "打开第40回：华山论剑", exact: true })).toBeInViewport();
+  await expect(
+    page.getByRole("button", { name: "打开第40回：华山论剑", exact: true }),
+  ).toBeInViewport();
   await expect(page.locator(".detail-content h2")).toHaveText("华山论剑");
   await expect(
     page.getByRole("slider", { name: "选择当前探索章节" }),

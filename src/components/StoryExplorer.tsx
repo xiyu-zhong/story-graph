@@ -198,7 +198,8 @@ export function StoryExplorer({ work }: { work: Work }) {
       if (box.top < parent.top || box.bottom > parent.bottom)
         flowScroll.current.scrollBy({
           top: box.top - parent.top - 100,
-          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)")
+            .matches
             ? "instant"
             : "smooth",
         });
