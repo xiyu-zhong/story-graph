@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Move, MousePointer2 } from "lucide-react";
 import type { Chapter, Work } from "@/lib/types";
 import { getGraphPositions } from "@/lib/story";
@@ -21,6 +21,101 @@ const edgeLabels = {
   faction: "归属",
 };
 
+type LocationKind = Work["locations"][number]["kind"];
+
+const kindLabels: Record<LocationKind, string> = {
+  city: "城",
+  mountain: "山",
+  island: "岛",
+  realm: "境界",
+  temple: "寺",
+  wilderness: "野",
+};
+
+const kindOrder = [
+  "city",
+  "mountain",
+  "island",
+  "realm",
+  "temple",
+  "wilderness",
+] as const;
+
+function KindGlyph({
+  kind,
+  fill,
+  stroke,
+}: {
+  kind: LocationKind;
+  fill: string;
+  stroke: string;
+}) {
+  const body = { fill, stroke, strokeWidth: 1 };
+  if (kind === "mountain") return <path d="M0-7L7 5H-7Z" {...body} />;
+  if (kind === "island")
+    return (
+      <>
+        <circle r="6" fill="none" stroke={stroke} strokeWidth="2" />
+        <circle r="1.5" fill={fill} stroke="none" />
+      </>
+    );
+  if (kind === "temple")
+    return (
+      <>
+        <path d="M0-8L5-2H-5Z" {...body} />
+        <rect x="-3" y="-2" width="6" height="7" {...body} />
+      </>
+    );
+  if (kind === "realm")
+    return (
+      <>
+        <path d="M0-7L6 0 0 7-6 0Z" {...body} />
+        <path
+          d="M0-3L2.5 0 0 3-2.5 0Z"
+          fill="none"
+          stroke={stroke}
+          strokeWidth="1"
+        />
+      </>
+    );
+  if (kind === "wilderness")
+    return (
+      <>
+        <circle cx="-5" cy="1.5" r="1.7" fill={fill} stroke="none" />
+        <circle cx="0" cy="-2" r="1.7" fill={fill} stroke="none" />
+        <circle cx="5" cy="1.5" r="1.7" fill={fill} stroke="none" />
+      </>
+    );
+  return (
+    <>
+      <rect x="-6" y="-4" width="12" height="9" {...body} />
+      <rect x="-6" y="-7" width="2.5" height="3" fill={fill} stroke="none" />
+      <rect x="-1.25" y="-7" width="2.5" height="3" fill={fill} stroke="none" />
+      <rect x="3.5" y="-7" width="2.5" height="3" fill={fill} stroke="none" />
+    </>
+  );
+}
+
+const cardCharsPerLine = 17;
+
+/**
+ * 0—100 的编辑排布坐标 → 视图坐标（单一来源，路线与节点共用）。
+ * 各作品 mapNote 已声明这些坐标不是经纬度。
+ */
+const plot = (location: { x: number; y: number }) => ({
+  x: 80 + location.x * 8.4,
+  y: 85 + location.y * 5.3,
+});
+
+const firstSentences = (text: string): string[] => {
+  const cut = text.split(/[。！？]/)[0];
+  const source = cut ? `${cut}。` : text;
+  const lines: string[] = [];
+  for (let index = 0; index < source.length; index += cardCharsPerLine)
+    lines.push(source.slice(index, index + cardCharsPerLine));
+  return lines.slice(0, 3);
+};
+
 export function Visualization({
   work,
   view,
@@ -28,6 +123,7 @@ export function Visualization({
   selection,
   onSelect,
   zoom,
+  onZoom,
 }: {
   work: Work;
   view: "characters" | "map";
@@ -35,6 +131,7 @@ export function Visualization({
   selection: Selection;
   onSelect: (selection: Selection) => void;
   zoom: number;
+  onZoom?: (zoom: number) => void;
 }) {
   const initial = useMemo(() => getGraphPositions(work), [work]);
   const [positions, setPositions] = useState(initial);
@@ -60,9 +157,7 @@ export function Visualization({
   const activeLocations = new Set(context.locationIds);
   const locationPoint = (id: string) => {
     const location = work.locations.find((item) => item.id === id);
-    return location
-      ? { x: 80 + location.x * 8.4, y: 85 + location.y * 5.3 }
-      : null;
+    return location ? plot(location) : null;
   };
   const route = chapter.locationIds
     .map(locationPoint)
@@ -70,6 +165,126 @@ export function Visualization({
   const regions = [
     ...new Set(work.locations.map((location) => location.region)),
   ];
+
+  const [hovered, setHovered] = useState<string | null>(null);
+
+  const locationStats = useMemo(() => {
+    const stats = new Map<
+      string,
+      { events: number; chapters: Set<string>; characters: Set<string> }
+    >();
+    for (const unit of work.chapters) {
+      for (const event of unit.events) {
+        if (!event.locationId) continue;
+        let entry = stats.get(event.locationId);
+        if (!entry) {
+          entry = { events: 0, chapters: new Set(), characters: new Set() };
+          stats.set(event.locationId, entry);
+        }
+        entry.events += 1;
+        entry.chapters.add(unit.id);
+        for (const id of event.characterIds) entry.characters.add(id);
+      }
+    }
+    return stats;
+  }, [work]);
+
+  const visibleLocations = useMemo(
+    () =>
+      work.locations.filter(
+        (location) => region === "all" || location.region === region,
+      ),
+    [work.locations, region],
+  );
+
+  const screenOf = useCallback(
+    (point: { x: number; y: number }) => ({
+      x: 500 + pan.x + zoom * (point.x - 500),
+      y: 370 + pan.y + zoom * (point.y - 370),
+    }),
+    [pan, zoom],
+  );
+
+  const fitTo = useCallback(
+    (points: { x: number; y: number }[]) => {
+      if (!points.length) return;
+      const xs = points.map((point) => point.x);
+      const ys = points.map((point) => point.y);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const minY = Math.min(...ys);
+      const maxY = Math.max(...ys);
+      const cx = (minX + maxX) / 2;
+      const cy = (minY + maxY) / 2;
+      const nextZoom =
+        points.length === 1
+          ? zoom
+          : Math.round(
+              Math.max(
+                0.6,
+                Math.min(
+                  1.7,
+                  Math.min(
+                    (1000 * 0.68) / Math.max(maxX - minX, 1),
+                    (740 * 0.68) / Math.max(maxY - minY, 1),
+                  ),
+                ),
+              ) * 10,
+            ) / 10;
+      if (nextZoom !== zoom) onZoom?.(nextZoom);
+      setPan({ x: -(nextZoom * (cx - 500)), y: -(nextZoom * (cy - 370)) });
+    },
+    [onZoom, zoom],
+  );
+
+  const regionFit = useRef<string | null>(null);
+  const locationFit = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (view !== "map") return;
+    if (regionFit.current === region) return;
+    regionFit.current = region;
+    if (region === "all") {
+      setPan({ x: 0, y: 0 });
+      if (zoom !== 1) onZoom?.(1);
+      return;
+    }
+    fitTo(visibleLocations.map(plot));
+  }, [view, region, visibleLocations, fitTo, zoom, onZoom]);
+
+  useEffect(() => {
+    if (view !== "map" || selection.kind !== "location") return;
+    if (locationFit.current === selection.id) return;
+    locationFit.current = selection.id;
+    const location = work.locations.find((item) => item.id === selection.id);
+    if (!location) return;
+    const point = plot(location);
+    const screen = screenOf(point);
+    const comfortable =
+      screen.x > 150 && screen.x < 850 && screen.y > 110 && screen.y < 630;
+    if (!comfortable) fitTo([point]);
+  }, [view, selection, work.locations, fitTo, screenOf]);
+
+  const hoveredCard = (() => {
+    if (view !== "map" || !hovered) return null;
+    const location = work.locations.find((item) => item.id === hovered);
+    if (!location) return null;
+    const screen = screenOf(plot(location));
+    const lines = firstSentences(location.description);
+    const width = 236;
+    const height = 82 + lines.length * 16;
+    const flipped = screen.x + width + 26 > 1000;
+    return {
+      location,
+      lines,
+      width,
+      height,
+      x: flipped ? screen.x - width - 18 : screen.x + 18,
+      y: Math.min(Math.max(screen.y - height / 2, 12), 740 - height - 12),
+      stats: locationStats.get(location.id),
+    };
+  })();
+
   const pointerPosition = (event: React.PointerEvent) => {
     const element = svg.current;
     if (!element) return { x: 0, y: 0 };
@@ -123,7 +338,7 @@ export function Visualization({
         <span>
           {view === "characters"
             ? `${work.characters.length} 人物 · ${work.relationships.length} 关系`
-            : work.mapLabel}
+            : `${work.mapLabel} · 显示 ${visibleLocations.length}/${work.locations.length} 地点`}
         </span>
         {view === "map" ? (
           <select
@@ -131,9 +346,13 @@ export function Visualization({
             value={region}
             onChange={(event) => setRegion(event.target.value)}
           >
-            <option value="all">全部区域</option>
+            <option value="all">全部区域（{work.locations.length}）</option>
             {regions.map((item) => (
-              <option key={item}>{item}</option>
+              <option key={item} value={item}>
+                {item}（
+                {work.locations.filter((place) => place.region === item).length}
+                ）
+              </option>
             ))}
           </select>
         ) : (
@@ -410,75 +629,107 @@ export function Visualization({
                   strokeWidth="1.5"
                 />
               )}
-              {work.locations
-                .filter(
-                  (location) => region === "all" || location.region === region,
-                )
-                .map((location) => {
-                  const point = locationPoint(location.id)!;
-                  const chosen =
-                    selection.kind === "location" &&
-                    selection.id === location.id;
-                  const active = activeLocations.has(location.id);
-                  return (
-                    <g
-                      key={location.id}
-                      transform={`translate(${point.x} ${point.y})`}
-                      role="button"
-                      tabIndex={0}
-                      aria-label={`查看地点${location.name}`}
-                      className={`location-node ${active ? "context-active" : ""} ${work.locations.length > 40 && !active && region === "all" ? "quiet-node" : ""}`}
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onClick={() =>
-                        onSelect({ kind: "location", id: location.id })
+              {visibleLocations.map((location) => {
+                const point = plot(location);
+                const chosen =
+                  selection.kind === "location" && selection.id === location.id;
+                const active = activeLocations.has(location.id);
+                const sameRegion =
+                  !chosen &&
+                  selection.kind === "location" &&
+                  work.locations.find((item) => item.id === selection.id)
+                    ?.region === location.region;
+                const stats = locationStats.get(location.id);
+                return (
+                  <g
+                    key={location.id}
+                    transform={`translate(${point.x} ${point.y})`}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`查看地点${location.name}`}
+                    data-kind={location.kind}
+                    data-region={location.region}
+                    data-events={stats?.events ?? 0}
+                    className={`location-node ${active ? "context-active" : ""} ${chosen ? "is-chosen" : ""} ${sameRegion ? "context-neighbor" : ""} ${work.locations.length > 40 && !active && !chosen && region === "all" ? "quiet-node" : ""}`}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onPointerEnter={() => setHovered(location.id)}
+                    onPointerLeave={() =>
+                      setHovered((value) =>
+                        value === location.id ? null : value,
+                      )
+                    }
+                    onFocus={() => setHovered(location.id)}
+                    onBlur={() =>
+                      setHovered((value) =>
+                        value === location.id ? null : value,
+                      )
+                    }
+                    onClick={() =>
+                      onSelect({ kind: "location", id: location.id })
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onSelect({ kind: "location", id: location.id });
                       }
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          onSelect({ kind: "location", id: location.id });
-                        }
-                      }}
-                    >
-                      <circle r="18" fill="transparent" />
-                      {active && (
-                        <circle
-                          r={chosen ? 24 : 18}
-                          fill={work.accent}
-                          opacity=".09"
-                        />
-                      )}
-                      {chosen && (
-                        <circle
-                          r="28"
-                          fill="none"
-                          stroke={work.accent}
-                          strokeOpacity=".5"
-                          strokeDasharray="3 4"
-                        />
-                      )}
-                      <path
-                        d={
-                          location.kind === "mountain"
-                            ? "M0-7L7 5H-7Z"
-                            : "M0-6L6 0 0 6-6 0Z"
-                        }
+                    }}
+                  >
+                    <circle r="18" fill="transparent" />
+                    {active && (
+                      <circle
+                        r={chosen ? 26 : 19}
+                        fill={work.accent}
+                        opacity=".09"
+                      />
+                    )}
+                    <circle
+                      className="node-halo"
+                      r={chosen ? 30 : 22}
+                      fill={work.accent}
+                    />
+                    {sameRegion && (
+                      <circle
+                        r="22"
+                        fill="none"
+                        stroke={work.accent}
+                        strokeOpacity=".26"
+                        strokeDasharray="2 4"
+                      />
+                    )}
+                    {chosen && (
+                      <circle
+                        r="30"
+                        fill="none"
+                        stroke={work.accent}
+                        strokeOpacity=".55"
+                        strokeDasharray="3 4"
+                      />
+                    )}
+                    <g className="node-glyph">
+                      <KindGlyph
+                        kind={location.kind}
                         fill={active ? work.accent : "#486675"}
                         stroke={active ? "#e6e4d5" : "#6a8290"}
-                        strokeWidth="1"
                       />
-                      <text
-                        x="0"
-                        y="23"
-                        textAnchor="middle"
-                        fill={active ? "#e9e4d6" : "#9db1bc"}
-                        fontSize={chosen ? 13 : 11}
-                        className="map-label"
-                      >
-                        {location.name}
-                      </text>
                     </g>
-                  );
-                })}
+                    <text
+                      x="0"
+                      y="23"
+                      textAnchor="middle"
+                      fill={active ? "#e9e4d6" : "#9db1bc"}
+                      fontSize={chosen ? 13 : 11}
+                      className="map-label"
+                    >
+                      {location.name}
+                      {stats && stats.events > 0 && (
+                        <tspan className="map-count" dx="3" dy="-3">
+                          {stats.events}
+                        </tspan>
+                      )}
+                    </text>
+                  </g>
+                );
+              })}
               <g
                 transform="translate(932 588)"
                 fill="none"
@@ -500,6 +751,50 @@ export function Visualization({
             </>
           )}
         </g>
+        {hoveredCard && (
+          <g
+            className="map-card"
+            transform={`translate(${hoveredCard.x} ${hoveredCard.y})`}
+            pointerEvents="none"
+          >
+            <rect
+              width={hoveredCard.width}
+              height={hoveredCard.height}
+              rx="8"
+              fill="#101f2b"
+              stroke="#3a6f8c"
+              strokeOpacity=".55"
+            />
+            <text x="14" y="26" fontSize="13" fill="#dfe7ea">
+              {hoveredCard.location.name}
+            </text>
+            <text x="14" y="44" fontSize="11" fill="#7fa3b8">
+              {kindLabels[hoveredCard.location.kind]} ·{" "}
+              {hoveredCard.location.region}
+            </text>
+            {hoveredCard.lines.map((line, index) => (
+              <text
+                key={`${line}-${index}`}
+                x="14"
+                y={66 + index * 16}
+                fontSize="11"
+                fill="#9db1bc"
+              >
+                {line}
+              </text>
+            ))}
+            <text
+              x="14"
+              y={hoveredCard.height - 12}
+              fontSize="11"
+              fill="#6e8ca0"
+            >
+              {hoveredCard.stats
+                ? `${hoveredCard.stats.chapters.size} 章 · ${hoveredCard.stats.characters.size} 人 · ${hoveredCard.stats.events} 事件`
+                : "暂无事件标注"}
+            </text>
+          </g>
+        )}
       </svg>
       <div className="visualization-bottom">
         {view === "characters" ? (
@@ -526,13 +821,29 @@ export function Visualization({
             ))}
           </div>
         ) : (
-          <p className="map-disclaimer">
-            叙事空间示意 · 非精确地理
-            <br />
-            <span>
-              高亮与虚线表示情节关联，可能包含回忆或转述，并非实际行程。
-            </span>
-          </p>
+          <div className="map-foot">
+            <div className="map-legend" aria-label="地点类型图例">
+              {kindOrder.map((kind) => (
+                <span key={kind}>
+                  <svg viewBox="-10 -10 20 20" aria-hidden="true">
+                    <KindGlyph kind={kind} fill="#5d7d8d" stroke="#7d97a4" />
+                  </svg>
+                  {kindLabels[kind]}
+                </span>
+              ))}
+              <span className="map-legend-note">
+                <i>n</i>
+                地点名后的上标＝该地点关联事件数
+              </span>
+            </div>
+            <p className="map-disclaimer">
+              叙事空间示意 · 非精确地理
+              <br />
+              <span>
+                高亮与虚线表示情节关联，可能包含回忆或转述，并非实际行程。
+              </span>
+            </p>
+          </div>
         )}
         <span className="canvas-hint">
           {view === "characters" ? (
@@ -541,7 +852,7 @@ export function Visualization({
             </>
           ) : (
             <>
-              <MousePointer2 size={12} /> 点击地点探索
+              <MousePointer2 size={12} /> 悬停查看详情 · 点击定位 · 拖动平移
             </>
           )}
         </span>

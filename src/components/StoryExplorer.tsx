@@ -865,6 +865,7 @@ export function StoryExplorer({ work }: { work: Work }) {
                 selection={selection}
                 onSelect={pick}
                 zoom={zoom}
+                onZoom={setZoom}
               />
             )}
             <div className="canvas-controls">

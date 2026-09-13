@@ -8,7 +8,8 @@
     "start": "next start --hostname 127.0.0.1",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "check:map-labels": "node scripts/measure-map-collisions.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.45.0",

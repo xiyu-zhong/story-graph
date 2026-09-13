@@ -1992,8 +1992,47 @@ kbd {
 .location-node {
   cursor: pointer;
 }
-.location-node:hover > path {
+.location-node:focus {
+  outline: none;
+}
+.location-node .node-halo {
+  opacity: 0;
+}
+.location-node:hover .node-halo,
+.location-node:focus-visible .node-halo,
+.location-node.is-chosen .node-halo {
+  opacity: 0.14;
+}
+.location-node:hover .node-glyph > path,
+.location-node:hover .node-glyph > rect,
+.location-node:focus-visible .node-glyph > path,
+.location-node:focus-visible .node-glyph > rect,
+.location-node:hover .node-glyph > circle:not([fill="none"]),
+.location-node:focus-visible .node-glyph > circle:not([fill="none"]) {
   fill: var(--work-accent);
+}
+.location-node:hover .map-label,
+.location-node:focus-visible .map-label,
+.location-node.is-chosen .map-label {
+  fill: #e9e4d6;
+}
+/* 事件数做成标签文本的行内上标：与名称共用一个 <text>，
+   避免独立角标方块落进邻居标签里把文字压糊。 */
+.map-count {
+  font-size: 8px;
+  fill: #86a9bd;
+}
+.quiet-node .map-count {
+  fill: #6d8b9d;
+}
+.location-node:hover .map-count,
+.location-node:focus-visible .map-count,
+.location-node.is-chosen .map-count {
+  fill: var(--work-accent);
+}
+.quiet-node:hover .map-count,
+.quiet-node:focus-within .map-count {
+  fill: #a9c3d1;
 }
 .map-label {
   paint-order: stroke;
@@ -2047,6 +2086,46 @@ kbd {
 }
 .map-disclaimer span {
   color: #8099a8;
+}
+.map-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 14px;
+}
+.map-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #7fa3b8;
+  font-size: 9px;
+}
+.map-legend svg {
+  width: 17px;
+  height: 17px;
+  overflow: visible;
+}
+.map-legend > span.map-legend-note {
+  color: #5d8199;
+}
+.map-legend-note i {
+  display: inline-grid;
+  place-items: center;
+  min-width: 16px;
+  height: 14px;
+  padding: 0 2px;
+  border: 1px solid #3f6273;
+  border-radius: 4px;
+  background: #14242f;
+  color: #9db1bc;
+  font: 9px var(--mono);
+  font-style: normal;
 }
 .reader-dialog {
   width: 850px;
