@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "method": "Original SVG illustrations drawn in code for this project; not generated through an image API.",
+  "usageNote": "Concept artwork, not official covers, film stills, actor photographs, or evidence of narrative facts.",
+  "assets": [
+    {
+      "id": "odyssey-cover",
+      "workId": "odyssey",
+      "path": "/art/odyssey.svg",
+      "revision": 1,
+      "width": 1200,
+      "height": 1800,
+      "format": "svg",
+      "theme": "Aegean voyage, moon, sail, classical architecture",
+      "textLayer": "rendered separately by the application"
+    },
+    {
+      "id": "journey-cover",
+      "workId": "journey",
+      "path": "/art/journey.svg",
+      "revision": 1,
+      "width": 1200,
+      "height": 1800,
+      "format": "svg",
+      "theme": "mountain pilgrimage, golden sun, stylized staff-bearing figure",
+      "textLayer": "rendered separately by the application"
+    },
+    {
+      "id": "mortal-cover",
+      "workId": "mortal",
+      "path": "/art/mortal.svg",
+      "revision": 1,
+      "width": 1200,
+      "height": 1800,
+      "format": "svg",
+      "theme": "floating mountains, portal ring, solitary traveler",
+      "textLayer": "rendered separately by the application"
+    },
+    {
+      "id": "condor-cover",
+      "workId": "condor",
+      "path": "/art/condor.svg",
+      "revision": 1,
+      "width": 1200,
+      "height": 1800,
+      "format": "svg",
+      "theme": "jade mountain landscape, archer, soaring condor and pale moon; symbolic composition, not a literal scene",
+      "textLayer": "rendered separately by the application"
+    }
+  ]
+}
