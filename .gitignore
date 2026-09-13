@@ -10,3 +10,25 @@ test-results/
 .DS_Store
 *.log
 .workbuddy/
+
+# ───────── 凭据与密钥：绝不入库 ─────────
+# 私钥、证书
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+id_ecdsa*
+# SSH 相关
+authorized_keys
+known_hosts
+# 其他常见凭据文件
+.netrc
+.htpasswd
+*.kdbx
+
+# ───────── 备份与数据库导出 ─────────
+backups/
+*.sql.gz
+*.dump
